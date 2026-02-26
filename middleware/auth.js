@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken')
 // Protect route
 exports.protect = async (req, res, next) => {
   let token
+  console.log('Request Headers:', req.headers) // Debug log
 
   if (
     req.headers.authorization &&

@@ -54,6 +54,7 @@ exports.createTag = async (req, res) => {
 // @access  Private
 exports.getTags = async (req, res) => {
   const owner_id = req.user.id
+  console.log('Fetching tags for user:', req.user) // Debug log
 
   try {
     const tags = await Tag.find({ owner_id })
@@ -102,7 +103,6 @@ exports.updateTag = async (req, res) => {
     tag.updated_at = new Date()
 
     await tag.save()
-
   } catch (err) {
     console.error(err.message)
     sendResponse(res, {
