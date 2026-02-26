@@ -1,6 +1,7 @@
 // 标签控制器
 const Tag = require('../models/Tag')
 const { validationResult } = require('express-validator')
+const sendResponse = require('../utils/response')
 
 // @route   POST /api/tags
 // @desc    Create a new tag
@@ -8,32 +9,43 @@ const { validationResult } = require('express-validator')
 exports.createTag = async (req, res) => {
   const errors = validationResult(req)
   if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() })
+    return sendResponse(res, {
+      success: false,
+      code: 40001,
+      message: '参数校验失败',
+      data: errors.array(),
+    })
   }
 
   const { name, color } = req.body
   const owner_id = req.user.id
 
   try {
-    // Check if tag already exists
     let tag = await Tag.findOne({ name, owner_id })
 
     if (tag) {
-      return res.status(400).json({ message: '标签已存在' })
+      return sendResponse(res, {
+        success: false,
+        code: 40004,
+        message: '标签已存在',
+      })
     }
 
-    tag = new Tag({
-      name,
-      color,
-      owner_id,
-    })
-
+    tag = new Tag({ name, color, owner_id })
     await tag.save()
 
-    res.status(201).json(tag)
+    sendResponse(res, {
+      message: '标签创建成功',
+      data: tag,
+      status: 201,
+    })
   } catch (err) {
     console.error(err.message)
-    res.status(500).send('Server error')
+    sendResponse(res, {
+      success: false,
+      code: 50000,
+      message: '服务器错误',
+    })
   }
 }
 
@@ -45,10 +57,14 @@ exports.getTags = async (req, res) => {
 
   try {
     const tags = await Tag.find({ owner_id })
-    res.json({ tags })
+    sendResponse(res, { tags })
   } catch (err) {
     console.error(err.message)
-    res.status(500).send('Server error')
+    sendResponse(res, {
+      success: false,
+      code: 50000,
+      message: '服务器错误',
+    })
   }
 }
 
@@ -64,12 +80,20 @@ exports.updateTag = async (req, res) => {
     let tag = await Tag.findById(tagId)
 
     if (!tag) {
-      return res.status(404).json({ message: '标签不存在' })
+      return sendResponse(res, {
+        success: false,
+        code: 404,
+        message: '标签不存在',
+      })
     }
 
     // Check if tag belongs to current user
     if (tag.owner_id.toString() !== owner_id) {
-      return res.status(403).json({ message: '无权更新此标签' })
+      return sendResponse(res, {
+        success: false,
+        code: 403,
+        message: '无权更新此标签',
+      })
     }
 
     // Update tag
@@ -79,10 +103,13 @@ exports.updateTag = async (req, res) => {
 
     await tag.save()
 
-    res.json(tag)
   } catch (err) {
     console.error(err.message)
-    res.status(500).send('Server error')
+    sendResponse(res, {
+      success: false,
+      code: 50000,
+      message: '服务器错误',
+    })
   }
 }
 
@@ -97,19 +124,34 @@ exports.deleteTag = async (req, res) => {
     const tag = await Tag.findById(tagId)
 
     if (!tag) {
-      return res.status(404).json({ message: '标签不存在' })
+      return sendResponse(res, {
+        success: false,
+        code: 404,
+        message: '标签不存在',
+      })
     }
 
     // Check if tag belongs to current user
     if (tag.owner_id.toString() !== owner_id) {
-      return res.status(403).json({ message: '无权删除此标签' })
+      return sendResponse(res, {
+        success: false,
+        code: 403,
+        message: '无权删除此标签',
+      })
     }
 
     await Tag.findByIdAndDelete(tagId)
 
-    res.status(204).json({ message: '标签已删除' })
+    sendResponse(res, {
+      message: '标签已删除',
+      status: 204,
+    })
   } catch (err) {
     console.error(err.message)
-    res.status(500).send('Server error')
+    sendResponse(res, {
+      success: false,
+      code: 50000,
+      message: '服务器错误',
+    })
   }
 }

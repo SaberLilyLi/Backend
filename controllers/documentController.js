@@ -2,6 +2,7 @@
 
 const Document = require('../models/Document')
 const { validationResult } = require('express-validator')
+const sendResponse = require('../utils/response')
 
 // @route   POST /api/documents
 // @desc    Create a new document
@@ -9,7 +10,12 @@ const { validationResult } = require('express-validator')
 exports.createDocument = async (req, res) => {
   const errors = validationResult(req)
   if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() })
+    return sendResponse(res, {
+      success: false,
+      code: 40001,
+      message: '参数校验失败',
+      data: errors.array(),
+    })
   }
 
   const { title, content, content_type, category, tags } = req.body
@@ -27,10 +33,18 @@ exports.createDocument = async (req, res) => {
 
     const newDocument = await document.save()
 
-    res.status(201).json(newDocument)
+    sendResponse(res, {
+      message: '文档创建成功',
+      data: newDocument,
+      status: 201,
+    })
   } catch (err) {
     console.error(err.message)
-    res.status(500).send('Server error')
+    sendResponse(res, {
+      success: false,
+      code: 50000,
+      message: '服务器错误',
+    })
   }
 }
 
@@ -62,7 +76,7 @@ exports.getDocuments = async (req, res) => {
       .skip((page - 1) * limit)
       .limit(limit)
 
-    res.json({
+    sendResponse(res, {
       documents,
       total,
       page: parseInt(page),
@@ -70,7 +84,11 @@ exports.getDocuments = async (req, res) => {
     })
   } catch (err) {
     console.error(err.message)
-    res.status(500).send('Server error')
+    sendResponse(res, {
+      success: false,
+      code: 50000,
+      message: '服务器错误',
+    })
   }
 }
 
@@ -82,18 +100,26 @@ exports.getDocument = async (req, res) => {
     const document = await Document.findById(req.params.id)
 
     if (!document) {
-      return res.status(404).json({ message: '文档不存在' })
+      return sendResponse(res, {
+        message: '文档不存在',
+      })
     }
 
     // Check if document belongs to current user
     if (document.author_id.toString() !== req.user.id) {
-      return res.status(403).json({ message: '无权访问此文档' })
+      return sendResponse(res, {
+        message: '无权访问此文档',
+      })
     }
 
-    res.json(document)
+    sendResponse(res, document)
   } catch (err) {
     console.error(err.message)
-    res.status(500).send('Server error')
+    sendResponse(res, {
+      success: false,
+      code: 50000,
+      message: '服务器错误',
+    })
   }
 }
 
@@ -109,12 +135,16 @@ exports.updateDocument = async (req, res) => {
     let document = await Document.findById(documentId)
 
     if (!document) {
-      return res.status(404).json({ message: '文档不存在' })
+      return sendResponse(res, {
+        message: '文档不存在',
+      })
     }
 
     // Check if document belongs to current user
     if (document.author_id.toString() !== author_id) {
-      return res.status(403).json({ message: '无权更新此文档' })
+      return sendResponse(res, {
+        message: '无权更新此文档',
+      })
     }
 
     // Update document
@@ -125,10 +155,14 @@ exports.updateDocument = async (req, res) => {
 
     await document.save()
 
-    res.json(document)
+    sendResponse(res, document)
   } catch (err) {
     console.error(err.message)
-    res.status(500).send('Server error')
+    sendResponse(res, {
+      success: false,
+      code: 50000,
+      message: '服务器错误',
+    })
   }
 }
 
@@ -143,19 +177,29 @@ exports.deleteDocument = async (req, res) => {
     const document = await Document.findById(documentId)
 
     if (!document) {
-      return res.status(404).json({ message: '文档不存在' })
+      return sendResponse(res, {
+        message: '文档不存在',
+      })
     }
 
     // Check if document belongs to current user
     if (document.author_id.toString() !== author_id) {
-      return res.status(403).json({ message: '无权删除此文档' })
+      return sendResponse(res, {
+        message: '无权删除此文档',
+      })
     }
 
     await Document.findByIdAndDelete(documentId)
 
-    res.status(204).json({ message: '文档已删除' })
+    sendResponse(res, {
+      message: '文档已删除',
+    })
   } catch (err) {
     console.error(err.message)
-    res.status(500).send('Server error')
+    sendResponse(res, {
+      success: false,
+      code: 50000,
+      message: '服务器错误',
+    })
   }
 }

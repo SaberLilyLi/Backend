@@ -1,123 +1,154 @@
-// 认证控制器
+// 认证控制器（企业级标准版）
 
 const User = require('../models/User')
 const jwt = require('jsonwebtoken')
 const { validationResult } = require('express-validator')
-const bcrypt = require('bcryptjs')
+const { randomUUID } = require('crypto')
+const sendResponse = require('../utils/response')
 
-// @route   POST /api/auth/register
-// @desc    Register user
-// @access  Public
-exports.register = async (req, res, next) => {
-  console.log(req.body, 'Request Body')
+// ========================= 注册 =========================
+exports.register = async (req, res) => {
+  const traceId = randomUUID()
   const errors = validationResult(req)
+
   if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() })
+    return sendResponse(res, {
+      success: false,
+      code: 40001,
+      message: '参数校验失败',
+      data: errors.array(),
+      traceId,
+    })
   }
 
   const { email, username, password } = req.body
 
   try {
-    // Check if user exists
-    let user = await User.findOne({ $or: [{ email }, { username }] })
+    // 检查是否存在
+    const existingUser = await User.findOne({
+      $or: [{ email }, { username }],
+    })
 
-    if (user) {
-      return res.status(400).json({ message: '用户已存在' })
+    if (existingUser) {
+      return sendResponse(res, {
+        success: false,
+        code: 40004,
+        message: '用户已存在',
+        traceId,
+      })
     }
 
-    // Create new user
-    user = new User({
+    // 创建用户（密码自动在 model 里加密）
+    const user = new User({
       email,
       username,
       password,
     })
+
     await user.save()
 
-    // Create JWT
-    const payload = {
-      id: user._id,
-      email: user.email,
-      username: user.username,
-    }
-
-    jwt.sign(
-      payload,
+    // 生成 JWT
+    const token = jwt.sign(
+      {
+        id: user._id,
+        email: user.email,
+      },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN },
-      (err, token) => {
-        if (err) {
-          return next(err) // 确保调用 next 处理错误
-        }
-        res.status(201).json({
-          _id: user._id,
-          email: user.email,
-          username: user.username,
-          token,
-        })
+      {
+        expiresIn: process.env.JWT_EXPIRES_IN || '7d',
       },
     )
+
+    return sendResponse(res, {
+      message: '注册成功',
+      data: {
+        _id: user._id,
+        email: user.email,
+        username: user.username,
+        token,
+      },
+      status: 201,
+      traceId,
+    })
   } catch (err) {
-    next(err) // 确保调用 next 处理错误
+    console.error(`[REGISTER ERROR]`, err)
+
+    return sendResponse(res, {
+      success: false,
+      code: 50000,
+      message: '服务器错误',
+      traceId,
+    })
   }
 }
 
-// @route   POST /api/auth/login
-// @desc    Login user
-// @access  Public
+// ========================= 登录 =========================
 exports.login = async (req, res) => {
+  const traceId = randomUUID()
   const { email, password } = req.body
 
   try {
-    // Check if user exists
-    let user = await User.findOne({ email })
-
-    console.log('输入密码:', password)
-    console.log('数据库密码:', user.password)
-
-    const testCompare = await bcrypt.compare(password, user.password)
-    console.log('直接compare结果:', testCompare)
+    const user = await User.findOne({ email })
 
     if (!user) {
-      return res.status(400).json({ message: '无效的邮箱或密码' })
+      return sendResponse(res, {
+        success: false,
+        code: 40002,
+        message: '用户不存在',
+        traceId,
+      })
     }
-    console.log(password, 777)
-    // Check password
-    const isMatch = await user.matchPassword(req.body.password)
-    console.log(isMatch, 888)
+
+    const isMatch = await user.matchPassword(password)
+
     if (!isMatch) {
-      return res.status(400).json({ message: '无效的邮箱或密码' })
+      return sendResponse(res, {
+        success: false,
+        code: 40003,
+        message: '密码错误',
+        traceId,
+      })
     }
 
-    // Create JWT
-    const payload = {
-      id: user._id,
-      email: user.email,
-      username: user.username,
-    }
-
-    jwt.sign(
-      payload,
+    const token = jwt.sign(
+      {
+        id: user._id,
+        email: user.email,
+      },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN },
-      (err, token) => {
-        if (err) throw err
-        res.json({
-          _id: user._id,
-          email: user.email,
-          username: user.username,
-          token,
-        })
+      {
+        expiresIn: process.env.JWT_EXPIRES_IN || '7d',
       },
     )
+
+    return sendResponse(res, {
+      message: '登录成功',
+      data: {
+        _id: user._id,
+        email: user.email,
+        username: user.username,
+        token,
+      },
+      traceId,
+    })
   } catch (err) {
-    console.error(err.message)
-    res.status(500).send('Server error')
+    console.error(`[LOGIN ERROR]`, err)
+
+    return sendResponse(res, {
+      success: false,
+      code: 50000,
+      message: '服务器错误',
+      traceId,
+    })
   }
 }
 
-// @route   POST /api/auth/logout
-// @desc    Logout user
-// @access  Private
+// ========================= 登出 =========================
 exports.logout = (req, res) => {
-  res.status(200).json({ message: '登出成功' })
+  const traceId = randomUUID()
+
+  return sendResponse(res, {
+    message: '登出成功',
+    traceId,
+  })
 }

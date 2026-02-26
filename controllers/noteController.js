@@ -2,6 +2,7 @@
 
 const Note = require('../models/Note')
 const { validationResult } = require('express-validator')
+const sendResponse = require('../utils/response')
 
 // @route   POST /api/notes
 // @desc    Create a new note
@@ -9,7 +10,12 @@ const { validationResult } = require('express-validator')
 exports.createNote = async (req, res) => {
   const errors = validationResult(req)
   if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() })
+    return sendResponse(res, {
+      success: false,
+      code: 40001,
+      message: '参数校验失败',
+      data: errors.array(),
+    })
   }
 
   const { title, content, content_type, category, tags, priority } = req.body
@@ -28,10 +34,18 @@ exports.createNote = async (req, res) => {
 
     const newNote = await note.save()
 
-    res.status(201).json(newNote)
+    sendResponse(res, {
+      message: '笔记创建成功',
+      data: newNote,
+      status: 201,
+    })
   } catch (err) {
     console.error(err.message)
-    res.status(500).send('Server error')
+    sendResponse(res, {
+      success: false,
+      code: 50000,
+      message: '服务器错误',
+    })
   }
 }
 
@@ -67,7 +81,7 @@ exports.getNotes = async (req, res) => {
       .skip((page - 1) * limit)
       .limit(limit)
 
-    res.json({
+    sendResponse(res, {
       notes,
       total,
       page: parseInt(page),
@@ -75,7 +89,11 @@ exports.getNotes = async (req, res) => {
     })
   } catch (err) {
     console.error(err.message)
-    res.status(500).send('Server error')
+    sendResponse(res, {
+      success: false,
+      code: 50000,
+      message: '服务器错误',
+    })
   }
 }
 
@@ -107,10 +125,18 @@ exports.updateNote = async (req, res) => {
 
     await note.save()
 
-    res.json(note)
+    sendResponse(res, {
+      message: '笔记更新成功',
+      data: note,
+      status: 200,
+    })
   } catch (err) {
     console.error(err.message)
-    res.status(500).send('Server error')
+    sendResponse(res, {
+      success: false,
+      code: 50000,
+      message: '服务器错误',
+    })
   }
 }
 
@@ -135,9 +161,16 @@ exports.deleteNote = async (req, res) => {
 
     await Note.findByIdAndDelete(noteId)
 
-    res.status(204).json({ message: '笔记已删除' })
+    sendResponse(res, {
+      message: '笔记已删除',
+      status: 204,
+    })
   } catch (err) {
     console.error(err.message)
-    res.status(500).send('Server error')
+    sendResponse(res, {
+      success: false,
+      code: 50000,
+      message: '服务器错误',
+    })
   }
 }
