@@ -15,7 +15,7 @@ router.post(
     check('username', '用户名必须至少3个字符').isLength({ min: 3 }),
     check('password', '密码必须至少6个字符').isLength({ min: 6 }),
   ],
-  register,
+  (req, res, next) => register(req, res, next), // 确保正确传递 next
 )
 
 // @route   POST /api/auth/login
@@ -27,12 +27,15 @@ router.post(
     check('email', '请输入有效邮箱').isEmail(),
     check('password', '密码必须至少6个字符').isLength({ min: 6 }),
   ],
-  login,
+  (req, res, next) => login(req, res, next), // 确保正确传递 next
 )
 
 // @route   POST /api/auth/logout
 // @desc    Logout user
 // @access  Private
-router.post('/logout', logout)
+router.post(
+  '/logout',
+  (req, res, next) => logout(req, res, next), // 确保正确传递 next
+)
 
 module.exports = router

@@ -1,14 +1,17 @@
+// src/config/db.js
 const mongoose = require('mongoose')
+const dotenv = require('dotenv')
+
+dotenv.config()
 
 const connectDB = async () => {
   try {
-    await mongoose.connect(process.env.MONGODB_URI, {
-      // 新版MongoDB驱动不需要这些选项
-    })
+    // ✅ 移除所有连接选项（Mongoose 5.12.14 默认启用）
+    await mongoose.connect(process.env.MONGODB_URI)
 
     console.log(`MongoDB Connected: ${mongoose.connection.host}`)
-  } catch (err) {
-    console.error(`Error: ${err.message}`)
+  } catch (error) {
+    console.error(`MongoDB connection error: ${error.message}`)
     process.exit(1)
   }
 }

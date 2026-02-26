@@ -3,11 +3,13 @@
 const User = require('../models/User')
 const jwt = require('jsonwebtoken')
 const { validationResult } = require('express-validator')
+const bcrypt = require('bcryptjs')
 
 // @route   POST /api/auth/register
 // @desc    Register user
 // @access  Public
-exports.register = async (req, res) => {
+exports.register = async (req, res, next) => {
+  console.log(req.body, 'Request Body')
   const errors = validationResult(req)
   if (!errors.isEmpty()) {
     return res.status(400).json({ errors: errors.array() })
@@ -29,7 +31,6 @@ exports.register = async (req, res) => {
       username,
       password,
     })
-
     await user.save()
 
     // Create JWT
@@ -44,7 +45,9 @@ exports.register = async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN },
       (err, token) => {
-        if (err) throw err
+        if (err) {
+          return next(err) // 确保调用 next 处理错误
+        }
         res.status(201).json({
           _id: user._id,
           email: user.email,
@@ -54,8 +57,7 @@ exports.register = async (req, res) => {
       },
     )
   } catch (err) {
-    console.error(err.message)
-    res.status(500).send('Server error')
+    next(err) // 确保调用 next 处理错误
   }
 }
 
@@ -68,14 +70,19 @@ exports.login = async (req, res) => {
   try {
     // Check if user exists
     let user = await User.findOne({ email })
-    console.log(user, 666)
+
+    console.log('输入密码:', password)
+    console.log('数据库密码:', user.password)
+
+    const testCompare = await bcrypt.compare(password, user.password)
+    console.log('直接compare结果:', testCompare)
 
     if (!user) {
       return res.status(400).json({ message: '无效的邮箱或密码' })
     }
     console.log(password, 777)
     // Check password
-    const isMatch = await user.matchPassword(password)
+    const isMatch = await user.matchPassword(req.body.password)
     console.log(isMatch, 888)
     if (!isMatch) {
       return res.status(400).json({ message: '无效的邮箱或密码' })
