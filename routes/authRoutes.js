@@ -4,6 +4,7 @@ const express = require('express')
 const router = express.Router()
 const { register, login, logout } = require('../controllers/authController')
 const { check } = require('express-validator')
+const asyncHandler = require('../middleware/asyncHandler')
 
 // @route   POST /api/auth/register
 // @desc    Register user
@@ -15,7 +16,7 @@ router.post(
     check('username', '用户名必须至少3个字符').isLength({ min: 3 }),
     check('password', '密码必须至少6个字符').isLength({ min: 6 }),
   ],
-  (req, res, next) => register(req, res, next), // 确保正确传递 next
+  asyncHandler(register),
 )
 
 // @route   POST /api/auth/login
@@ -27,15 +28,12 @@ router.post(
     check('email', '请输入有效邮箱').isEmail(),
     check('password', '密码必须至少6个字符').isLength({ min: 6 }),
   ],
-  (req, res, next) => login(req, res, next), // 确保正确传递 next
+  asyncHandler(login),
 )
 
 // @route   POST /api/auth/logout
 // @desc    Logout user
 // @access  Private
-router.post(
-  '/logout',
-  (req, res, next) => logout(req, res, next), // 确保正确传递 next
-)
+router.post('/logout', asyncHandler(logout))
 
 module.exports = router

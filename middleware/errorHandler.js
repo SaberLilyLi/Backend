@@ -1,24 +1,43 @@
-// 错误处理中间件
-// Error handler middleware
+const sendResponse = require('../utils/response')
+const AppError = require('../utils/AppError')
+
+// 统一错误处理中间件（企业级风格）
 module.exports = (err, req, res, next) => {
-  console.error(err.stack)
+  // 记录原始错误，生产环境可替换为专业日志系统
+  console.error(err)
 
-  // Handle validation errors
+  // 标准化错误对象
+  let statusCode = err.statusCode || 500
+  let code = err.code || 50000
+  let message = err.message || '服务器内部错误'
+
+  // Mongoose 校验错误
   if (err.name === 'ValidationError') {
-    return res.status(400).json({ message: '验证错误', errors: err.errors })
+    statusCode = 400
+    code = 40001
+    message = '参数验证失败'
   }
 
-  // Handle duplicate key error (e.g., unique constraint)
+  // Mongo 唯一索引冲突
   if (err.name === 'MongoServerError' && err.code === 11000) {
-    const field = Object.keys(err.keyPattern)[0]
-    return res.status(400).json({ message: `字段 ${field} 已存在` })
+    statusCode = 400
+    code = 40002
+    const field = Object.keys(err.keyPattern || {})[0]
+    message = `字段 ${field} 已存在`
   }
 
-  // Handle 404 errors
-  if (err.status === 404) {
-    return res.status(404).json({ message: err.message })
+  // 自定义 AppError
+  if (err instanceof AppError) {
+    // AppError 已经带有业务 code，这里只尊重它的 code 和 message
+    code = err.code
+    message = err.message
+    statusCode = statusCode || 400
   }
 
-  // Default error response
-  res.status(500).json({ message: '服务器内部错误' })
+  return sendResponse(res, {
+    success: false,
+    code,
+    message,
+    status: statusCode,
+  })
 }

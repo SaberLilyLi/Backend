@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken')
 const { validationResult } = require('express-validator')
 const { randomUUID } = require('crypto')
 const sendResponse = require('../utils/response')
+const config = require('../config/config')
 
 // ========================= 注册 =========================
 exports.register = async (req, res) => {
@@ -53,9 +54,9 @@ exports.register = async (req, res) => {
         id: user._id,
         email: user.email,
       },
-      process.env.JWT_SECRET,
+      config.jwt.secret,
       {
-        expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+        expiresIn: config.jwt.expiresIn,
       },
     )
 
@@ -115,9 +116,9 @@ exports.login = async (req, res) => {
         id: user._id,
         email: user.email,
       },
-      process.env.JWT_SECRET,
+      config.jwt.secret,
       {
-        expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+        expiresIn: config.jwt.expiresIn,
       },
     )
 
