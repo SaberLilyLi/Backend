@@ -85,6 +85,7 @@
   - `content_type`：内容类型（默认 `markdown`）。
   - `category`：分类名称（与 Category 逻辑关联）。
   - `tags`：标签字符串数组（与 Tag 逻辑关联）。
+  - `description`：文件描述 / 备注说明，仅用于展示与说明，不参与权限控制。
   - `author_id`：关联用户 ID。
   - `visibility`：可见性，`private` / `public`，默认 `private`。
   - `publicFrom` / `publicTo`：公开时间窗口（可选）。
@@ -116,6 +117,13 @@
   - `userId`：发起搜索的用户 ID。
   - `query`：搜索关键字 / 问句。
   - `createdAt`：搜索时间。
+
+- **DocumentShare**（文档定向共享）
+  - `documentId`：被共享的文档 ID。
+  - `ownerId`：发起共享的用户 ID（一般为文档作者）。
+  - `targetUserId`：被共享的目标用户 ID。
+  - `expiresAt`：共享失效时间（最大为创建时间 + 30 天）。
+  - `createdAt`：共享创建时间。
 
 ---
 
@@ -159,10 +167,11 @@
   - 目标：提供文档从创建、浏览、搜索、编辑、删除到版本管理的完整生命周期支撑。
   - 接口：`/documents` 系列（详情见 API 文档）。
   - 功能要点：
-    - `POST /documents`：创建文档（支持后续扩展上传元数据）。
-    - `POST /documents/query`：复杂查询、分页、过滤、排序，支持模式（默认/收藏/最近/已归档）与按标签、名称、上传用户过滤。
-    - `GET /documents/:id`：详情。
-    - `PUT /documents/:id`：更新。
+    - `POST /documents`：创建文档（包括正文内容与文件描述 / 备注，支持后续扩展上传元数据）。
+    - `POST /documents/query`：复杂查询、分页、过滤、排序，支持模式（默认/收藏/最近/已归档）与按标签、名称、上传用户过滤，仅返回列表元数据，不包含文件/正文本身。
+    - `GET /documents/:id`：详情，返回文档元信息（名称、标签、分类、上传人、公开时间窗口等）以及文件下载链接 `downloadUrl`，但不直接返回文件内容；文件下载通过专门的导出接口完成。
+    - `PUT /documents/:id`：轻量更新元数据（如标题、分类、标签），不建议在此接口修改文件内容。
+    - `POST /documents/:id/save`：编辑保存接口，仅允许修改文件描述 / 备注，不允许修改原有文件内容。
     - `PUT /documents/:id/visibility`：设置文档可见性与公开时间窗口。
     - `DELETE /documents/:id`：删除。
     - `/documents/:id/versions...`：版本列表、查看、恢复。
@@ -170,6 +179,7 @@
     - 文档默认 `visibility = private`，仅作者本人与管理员可访问。
     - 作者可设置 `visibility = public` 并指定 `publicFrom/publicTo`，在时间窗口内文档对所有用户可见。
     - 管理员可以对公开文档进行“禁止公开”处理（`publicBlocked = true`），即使作者设置为 public 也不再对普通用户展示。
+    - 作者还可以通过 `DocumentShare` 针对指定用户做“定向共享”，共享时长最大 30 天，到期自动失效。
   - 用户级视图与元数据：
     - 通过 `UserDocumentMeta` 记录用户与文档之间的关系：收藏、归档、最近访问时间等。
     - 前端“默认查询 / 收藏 / 最近 / 已归档”四个视图均基于同一文档集合，通过 `mode` 字段和 `UserDocumentMeta` 进行区分。

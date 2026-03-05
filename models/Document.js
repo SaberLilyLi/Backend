@@ -6,9 +6,14 @@ const documentSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    // 文本内容（例如 Markdown），用于渲染与导出
     content: {
       type: String,
       required: true,
+    },
+    // 文件描述 / 备注，仅用于展示与说明
+    description: {
+      type: String,
     },
     content_type: {
       type: String,
