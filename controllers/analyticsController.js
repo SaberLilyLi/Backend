@@ -1,6 +1,7 @@
 const Document = require('../models/Document')
 const Note = require('../models/Note')
 const sendResponse = require('../utils/response')
+const SearchLog = require('../models/SearchLog')
 
 // @route   GET /api/analytics/overview
 // @desc    知识库概览统计（文档数量、笔记数量等）
@@ -90,4 +91,74 @@ exports.getTrends = async (req, res) => {
     })
   }
 }
+
+// @route   GET /api/analytics/user-summary
+// @desc    用户级统计：文档/笔记数量 + 最近 3/7/30 天文档变更与搜索次数
+// @access  Private
+exports.getUserSummary = async (req, res) => {
+  const userId = req.user.id
+  const now = new Date()
+
+  const daysAgo = (n) => new Date(now.getTime() - n * 24 * 60 * 60 * 1000)
+
+  try {
+    const [docCount, noteCount, changes3, changes7, changes30, search3, search7, search30] =
+      await Promise.all([
+        Document.countDocuments({ author_id: userId }),
+        Note.countDocuments({ author_id: userId }),
+        Document.countDocuments({
+          author_id: userId,
+          updated_at: { $gte: daysAgo(3) },
+        }),
+        Document.countDocuments({
+          author_id: userId,
+          updated_at: { $gte: daysAgo(7) },
+        }),
+        Document.countDocuments({
+          author_id: userId,
+          updated_at: { $gte: daysAgo(30) },
+        }),
+        SearchLog.countDocuments({
+          userId,
+          createdAt: { $gte: daysAgo(3) },
+        }),
+        SearchLog.countDocuments({
+          userId,
+          createdAt: { $gte: daysAgo(7) },
+        }),
+        SearchLog.countDocuments({
+          userId,
+          createdAt: { $gte: daysAgo(30) },
+        }),
+      ])
+
+    return sendResponse(res, {
+      message: '用户统计获取成功',
+      data: {
+        counts: {
+          documents: docCount,
+          notes: noteCount,
+        },
+        documentChanges: {
+          last3Days: changes3,
+          last7Days: changes7,
+          last30Days: changes30,
+        },
+        searches: {
+          last3Days: search3,
+          last7Days: search7,
+          last30Days: search30,
+        },
+      },
+    })
+  } catch (err) {
+    console.error('[ANALYTICS_USER_SUMMARY_ERROR]', err)
+    return sendResponse(res, {
+      success: false,
+      code: 50000,
+      message: '服务器错误',
+    })
+  }
+}
+
 

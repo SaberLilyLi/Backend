@@ -23,6 +23,7 @@ exports.register = async (req, res) => {
   }
 
   const { email, username, password } = req.body
+  const avatarFile = req.file
 
   try {
     // 检查是否存在
@@ -44,6 +45,9 @@ exports.register = async (req, res) => {
       email,
       username,
       password,
+      avatarUrl: avatarFile
+        ? `/static/avatars/${avatarFile.filename}`
+        : undefined,
     })
 
     await user.save()
@@ -53,6 +57,7 @@ exports.register = async (req, res) => {
       {
         id: user._id,
         email: user.email,
+        role: user.role,
       },
       config.jwt.secret,
       {
@@ -115,6 +120,7 @@ exports.login = async (req, res) => {
       {
         id: user._id,
         email: user.email,
+        role: user.role,
       },
       config.jwt.secret,
       {
@@ -152,4 +158,87 @@ exports.logout = (req, res) => {
     message: '登出成功',
     traceId,
   })
+}
+
+// ========================= 更新个人资料（密码 & 头像） =========================
+exports.updateProfile = async (req, res) => {
+  const traceId = randomUUID()
+  const errors = validationResult(req)
+
+  if (!errors.isEmpty()) {
+    return sendResponse(res, {
+      success: false,
+      code: 40001,
+      message: '参数校验失败',
+      data: errors.array(),
+      traceId,
+    })
+  }
+
+  const userId = req.user.id
+  const { currentPassword, newPassword } = req.body
+  const avatarFile = req.file
+
+  try {
+    const user = await User.findById(userId)
+
+    if (!user) {
+      return sendResponse(res, {
+        success: false,
+        code: 40002,
+        message: '用户不存在',
+        traceId,
+      })
+    }
+
+    // 如果传入新密码，则必须校验当前密码
+    if (newPassword) {
+      if (!currentPassword) {
+        return sendResponse(res, {
+          success: false,
+          code: 40001,
+          message: '修改密码需要提供当前密码',
+          traceId,
+        })
+      }
+
+      const match = await user.matchPassword(currentPassword)
+      if (!match) {
+        return sendResponse(res, {
+          success: false,
+          code: 40003,
+          message: '当前密码不正确',
+          traceId,
+        })
+      }
+
+      user.password = newPassword
+    }
+
+    // 如果上传了新的头像，则更新 avatarUrl
+    if (avatarFile) {
+      user.avatarUrl = `/static/avatars/${avatarFile.filename}`
+    }
+
+    await user.save()
+
+    return sendResponse(res, {
+      message: '个人资料更新成功',
+      data: {
+        _id: user._id,
+        email: user.email,
+        username: user.username,
+        avatarUrl: user.avatarUrl,
+      },
+      traceId,
+    })
+  } catch (err) {
+    console.error('[UPDATE_PROFILE_ERROR]', err)
+    return sendResponse(res, {
+      success: false,
+      code: 50000,
+      message: '服务器错误',
+      traceId,
+    })
+  }
 }

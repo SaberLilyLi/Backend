@@ -28,6 +28,7 @@ exports.protect = (req, res, next) => {
     req.user = {
       id: decoded.id,
       email: decoded.email,
+      role: decoded.role || 'user',
     }
     return next()
   } catch (err) {
@@ -39,4 +40,17 @@ exports.protect = (req, res, next) => {
       status: 401,
     })
   }
+}
+
+// 仅管理员可访问的路由守卫
+exports.adminOnly = (req, res, next) => {
+  if (!req.user || req.user.role !== 'admin') {
+    return sendResponse(res, {
+      success: false,
+      code: 40301,
+      message: '无权限执行此操作，需要管理员身份',
+      status: 403,
+    })
+  }
+  return next()
 }

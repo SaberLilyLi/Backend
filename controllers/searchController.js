@@ -1,6 +1,7 @@
 const { validationResult } = require('express-validator')
 const sendResponse = require('../utils/response')
 const { semanticSearch } = require('../services/aiService')
+const SearchLog = require('../models/SearchLog')
 
 // @route   POST /api/search
 // @desc    语义搜索 + 智能问答（占位 RAG 实现） 
@@ -20,6 +21,11 @@ exports.semanticSearch = async (req, res) => {
   const userId = req.user.id
 
   try {
+    // 记录搜索日志，用于后续统计分析
+    SearchLog.create({ userId, query }).catch((err) => {
+      console.error('[SEARCH_LOG_ERROR]', err)
+    })
+
     const { results, answer } = await semanticSearch({
       userId,
       query,
