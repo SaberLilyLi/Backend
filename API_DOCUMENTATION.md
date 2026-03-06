@@ -5,7 +5,7 @@
 统一约定：
 - **认证方式**：除标注为公开接口外，其他接口均需要在请求头中携带 `Authorization: Bearer <token>`。
 - **HTTP 方法约定（偏企业级风格）**：
-  - `GET`：仅用于**简单读取**，且参数极少的接口（例如：获取单条详情 `GET /resource/:id`）。
+  - 历史接口中保留少量 `GET`（如健康检查、部分统计/详情），**自本次版本起，新接口一律不再使用 `GET`**。
   - `POST`：用于创建资源，以及**带有复杂查询条件或分页排序参数的查询接口**（不再在 GET 的 Query / Header 中堆叠大量参数）。
   - `PUT / PATCH`：更新资源。
   - `DELETE`：删除资源。
@@ -43,7 +43,8 @@
   - 文件字段（可选）:
     - `avatar` (file, 可选): 头像图片（`jpg` / `png` / `webp`），大小不超过 2MB。
 - **响应**:
-  - 成功: 返回用户信息（含可选 `avatarUrl`）和 JWT 令牌。
+  - 成功: 返回用户基础信息、角色以及 JWT 令牌：
+    - `_id`、`email`、`username`、`role`、`token`，以及可选的 `avatarUrl`。
   - 失败: 返回错误信息（如图片格式/大小不符合、邮箱已存在等）。
 
 ### POST /api/auth/login
@@ -54,7 +55,9 @@
   - `email` (string, 必填): 用户的邮箱地址。
   - `password` (string, 必填): 用户的密码。
 - **响应**:
-  - 成功: 返回用户信息和 JWT 令牌。
+  - 成功: 返回用户基础信息、角色以及 JWT 令牌：
+    - `_id`、`email`、`username`、`role`、`token`。
+    - 前端可根据 `role` 渲染不同菜单和权限（如 admin 后台入口、viewer 受限操作提示等）。
   - 失败: 返回错误信息。
 
 ### POST /api/auth/logout
@@ -85,9 +88,231 @@
     - `_id`、`email`、`username`、`avatarUrl`。
   - 失败: 返回错误信息（如当前密码错误、头像不合规等）。
 
+### POST /api/auth/role-requests
+
+- **描述**: viewer 角色用户提交权限申请（例如申请升级为普通用户 user，以便创建和编辑文档/笔记）。
+- **权限**: 私有（仅 `viewer`）
+- **请求体（JSON）**:
+  - `targetRole` (string, 可选): 目标角色，目前仅支持 `"user"`，不传时默认 `"user"`。
+  - `reason` (string, 可选): 申请原因说明，供管理员审批参考。
+- **行为规则**:
+  - 若当前用户不是 `viewer`，接口返回错误（普通用户和管理员无需通过此接口变更角色）。
+  - 相同用户 + 相同目标角色在存在状态为 `pending` 的申请时，禁止重复提交。
+- **响应**:
+  - 成功: 返回创建的申请记录对象。
+  - 失败: 返回参数错误或角色不匹配等错误信息。
+
+### POST /api/auth/role-requests/query
+
+- **描述**: 管理员按条件查询权限申请列表，用于审批 viewer 的权限升级。
+- **权限**: 私有（仅 `admin`）
+- **请求体（JSON，可选）**:
+  - `status` (string, 可选): 按状态过滤，`pending` | `approved` | `rejected` | `auto_rejected`，默认返回全部。
+  - `userEmail` / `username` (string, 可选): 按用户信息模糊查询。
+  - `dateRange` (object, 可选): 申请时间范围，例如 `{ "from": "2026-03-01", "to": "2026-03-31" }`。
+- **响应**:
+  - 成功: 返回申请列表，每项包含:
+    - `userId`（附带 `username/email/role`）
+    - `targetRole`
+    - `reason`
+    - `status`
+    - `decidedBy`（如已处理，附带管理员基本信息）
+    - `decidedAt`
+    - `decisionComment`
+
+### POST /api/auth/role-requests/:id/approve
+
+- **描述**: 管理员同意某条权限申请，通常为将 viewer 升级为 user。
+- **权限**: 私有（仅 `admin`）
+- **请求体（JSON，可选）**:
+  - `decisionComment` (string, 可选): 审批备注。
+- **行为规则**:
+  - 仅允许对状态为 `pending` 的申请执行操作。
+  - 同意后:
+    - 更新申请状态为 `approved`，记录 `decidedBy/decidedAt/decisionComment`。
+    - 将对应用户的 `role` 更新为申请中的 `targetRole`（当前为 `user`）。
+- **响应**:
+  - 成功: 返回更新后的申请记录。
+
+### POST /api/auth/role-requests/:id/reject
+
+- **描述**: 管理员拒绝某条权限申请。
+- **权限**: 私有（仅 `admin`）
+- **请求体（JSON，可选）**:
+  - `decisionComment` (string, 可选): 拒绝原因。
+- **行为规则**:
+  - 仅允许对状态为 `pending` 的申请执行操作。
+  - 拒绝后:
+    - 更新申请状态为 `rejected`，记录 `decidedBy/decidedAt/decisionComment`。
+- **响应**:
+  - 成功: 返回更新后的申请记录。
+
 ---
 
-## 二、知识库主页相关接口
+## 二、角色与预览管理相关接口（viewer 专用与管理员管理）
+
+本节补充定义 viewer 在文档预览上的配额控制接口，以及管理员对 viewer 预览行为和配额的管理接口。
+
+### 1. viewer 预览行为入口
+
+#### POST /api/viewer/previews/initiate
+
+- **描述**：viewer 发起对某个文档的预览请求。后端根据当前用户的默认日配额、已使用次数、额外配额窗口和冷静期等规则判断：
+  - 若仍有可用配额（默认或额外），则允许预览，并在预览行为日志中记录“首次预览时间”。
+  - 若配额已用尽但允许申请，则引导创建新增配额申请记录。
+- **权限**：私有（仅 `viewer`）
+- **请求体（JSON）**：
+  - `documentId` (string, 必填)：欲预览的文档 ID。
+  - `reason` (string, 可选)：本次预览的用途说明，便于管理员审查（例如“临时查看项目文档”）。
+- **行为规则（概要）**：
+  - 若该 viewer 在过去 24 小时内首次预览过该文档：
+    - 本次调用不再额外消耗文档计数，仅视为再次访问，接口直接返回“允许预览”。
+  - 若该文档在 24 小时内尚未被该 viewer 预览过：
+    - 若该 viewer 在当前计数周期内尚未用尽（默认日配额 + 生效中的额外配额）：
+      - 允许预览，并记录一条 ViewerPreviewLog（日计数 +1）。
+    - 若已用尽：
+      - 返回“配额已用完，需要申请新增预览次数”的错误码，前端可跳转到申请接口。
+- **响应**：
+  - 成功（允许预览）：
+    - `allowed: true`
+    - `reasonCode`: `"within_quota"` 或 `"within_24h_same_document"`
+  - 失败（需要申请或处于冷静期）：
+    - `allowed: false`
+    - `reasonCode`: `"quota_exhausted"` / `"cooldown"` / 其他业务码
+    - `message`: 详细提示。
+
+> 实际“拉取文档内容/下载链接”的行为仍通过现有文档详情/导出接口完成，前端需在调用本接口并获得允许后，才触发文档预览相关接口。
+
+### 2. viewer 申请新增预览配额
+
+#### POST /api/viewer/preview-quota/requests
+
+- **描述**：viewer 在配额不足时，申请在一定时间窗口内增加可预览文件数量。
+- **权限**：私有（仅 `viewer`）
+- **请求体（JSON）**：
+  - `suggestedExtraTotal` (number, 可选)：期望增加的额外可预览文件数（仅作参考，最终由管理员决定）。
+  - `comment` (string, 可选)：申请说明。
+- **行为规则**：
+  - 若当前 viewer 仍有未过期的额外配额窗口，或处于冷静期内，则拒绝创建新申请。
+  - 创建成功后，状态为 `pending`，等待管理员审批；若 24 小时内未处理，将自动标记为 `auto_rejected`。
+- **响应**：
+  - 成功：返回创建的申请记录（含 `status = "pending"`）。
+  - 失败：返回错误信息（如当前不能申请、已有 pending 申请等）。
+
+### 3. 管理员查看与审批 viewer 预览配额申请
+
+#### POST /api/admin/preview-quota/requests/query
+
+- **描述**：管理员按条件查询 viewer 的预览配额申请列表。
+- **权限**：私有（仅 `admin`）
+- **请求体（JSON，可选）**：
+  - `status` (string, 可选)：按状态过滤，`pending` | `approved` | `rejected` | `auto_rejected`。
+  - `viewerEmail` / `viewerName` (string, 可选)：按 viewer 信息模糊过滤。
+  - `dateRange` (object, 可选)：申请时间范围。
+- **响应**：
+  - 成功：返回申请列表，每项包含：
+    - 申请基本信息（viewer、创建时间、状态、申请说明）。
+    - 审批信息（如已处理：`decidedBy/decidedAt/decisionComment`）。
+    - 生效配置（`effectiveFrom/effectiveTo/extraTotal/extraRemaining/cooldownUntil`）。
+
+#### POST /api/admin/preview-quota/requests/:id/approve
+
+- **描述**：管理员同意一条预览配额申请，并设置生效时间与额外配额数量。
+- **权限**：私有（仅 `admin`）
+- **请求体（JSON）**：
+  - `effectiveFrom` (string, 可选)：生效开始时间，ISO 时间字符串；不传时默认当前时间。
+  - `effectiveDurationHours` (number, 可选)：生效时长（单位小时），默认 24 小时，可配置为 72 等。
+  - `extraTotal` (number, 必填)：本次批准的额外可预览文件数（例如 10）。
+  - `cooldownHours` (number, 可选)：生效窗口结束后冷静期时长（单位小时），默认 12。
+  - `decisionComment` (string, 可选)：审批说明。
+- **行为规则**：
+  - 仅允许对 `pending` 状态的申请执行审批。
+  - 设置：
+    - `effectiveFrom` / `effectiveTo`（按时长计算）。
+    - `extraTotal` / `extraRemaining`（初始相等）。
+    - `cooldownUntil` = `effectiveTo` + 冷静期时长。
+  - 更新申请的 `status = "approved"`，并写入审批人信息。
+- **响应**：
+  - 成功：返回更新后的申请记录。
+
+#### POST /api/admin/preview-quota/requests/:id/reject
+
+- **描述**：管理员拒绝一条预览配额申请。
+- **权限**：私有（仅 `admin`）
+- **请求体（JSON，可选）**：
+  - `decisionComment` (string, 可选)：拒绝原因。
+- **行为规则**：
+  - 仅允许对 `pending` 状态的申请执行操作。
+  - 更新申请 `status = "rejected"`，记录审批人和时间。
+- **响应**：
+  - 成功：返回更新后的申请记录。
+
+### 4. 管理员查看 user / viewer 详情与日志
+
+> 以下接口建议挂在统一的管理员前缀下，以免与普通用户接口混淆；此处仅给出路径示例，具体路径可根据后端实现微调。
+
+#### POST /api/admin/users/query
+
+- **描述**：管理员按条件查询系统中的 user 和 viewer 用户列表，支持按权限、用户名、邮箱筛选及分页。
+- **权限**：私有（仅 `admin`）
+- **请求体（JSON，可选）**：
+  - `role` (string | array&lt;string&gt;, 可选)：按角色过滤。单值：`user` | `viewer` | `admin`；数组时匹配其中任一角色。
+  - `username` (string, 可选)：用户名模糊搜索（不区分大小写）。
+  - `email` (string, 可选)：邮箱模糊搜索（不区分大小写）。
+  - `keyword` (string, 可选)：关键字，同时模糊匹配用户名和邮箱（与 `username`/`email` 可同时使用，条件为 AND）。
+  - `page` (number, 可选)：页码，默认 1。
+  - `limit` (number, 可选)：每页条数，默认 20，最大 100。
+- **响应**：
+  - 成功：`data` 包含：
+    - `users` (array)：用户列表，每项含 `_id`、`email`、`username`、`role`、`avatarUrl`、`createdAt`，不包含 `password`。
+    - `total`：符合条件的总条数。
+    - `page`、`limit`：当前页码与每页条数。
+
+#### POST /api/admin/users/:userId/detail
+
+- **描述**：管理员查看某用户的详情。
+- **权限**：私有（仅 `admin`）
+- **请求体（JSON，可选）**：
+  - `includeActivityLogs` (boolean, 可选)：是否返回文档提交/修改记录（针对 user）。
+  - `includePreviewLogs` (boolean, 可选)：是否返回预览/配额相关日志（针对 viewer）。
+- **响应**（示例结构）：
+  - 对 user：
+    - `basicInfo`：用户基础信息。
+    - `documentActivityLogs`：文档提交/修改记录，支持前端按记录下载文件。
+  - 对 viewer：
+    - `basicInfo`：用户基础信息。
+    - `previewLogs`：ViewerPreviewLog 列表。
+    - `quotaRequests`：PreviewQuotaRequest 列表。
+    - `currentQuotaConfig`：当前默认每日配额、已生效的额外配额信息、冷静期状态等。
+
+### 5. 管理员修改 viewer 权限与预览配置
+
+#### POST /api/admin/viewers/:viewerId/update-role
+
+- **描述**：管理员调整 viewer 角色，可进行临时或永久的升级为 user。
+- **权限**：私有（仅 `admin`）
+- **请求体（JSON）**：
+  - `mode` (string, 必填)：`"temporary"` 或 `"permanent"`。
+  - `temporaryUntil` (string, 可选)：临时升级截止时间，ISO 时间字符串，仅在 `mode = "temporary"` 时使用。
+  - `decisionComment` (string, 可选)：说明。
+- **行为规则**：
+  - `mode = "temporary"`：设置用户在 `temporaryUntil` 之前视为 user，到期自动恢复为 viewer。
+  - `mode = "permanent"`：直接将 `role` 更新为 user，不再自动回退。
+
+#### POST /api/admin/viewers/:viewerId/update-preview-config
+
+- **描述**：管理员长期调整某个 viewer 的默认每日预览配额（如从 10 次/天调整为 20 次/天），并可手动调整冷静期。
+- **权限**：私有（仅 `admin`）
+- **请求体（JSON）**：
+  - `dailyLimit` (number, 可选)：新的默认每日可预览文件数。
+  - `cooldownUntil` (string, 可选)：新的冷静期结束时间；若要立即结束冷静期，可传当前时间之前的时间戳或专门的标志位。
+  - `comment` (string, 可选)：调整说明。
+- **响应**：
+  - 成功：返回更新后的 viewer 配置摘要。
+
+---
+
+## 三、知识库主页相关接口
 
 对应页面：「知识库主页」
 - 顶部：语义搜索、上传文档、新建文件夹、导出数据。
@@ -299,7 +524,7 @@
 - **响应**：
   - **data**：更新后的文档对象。
 
-### 3.1 编辑保存文档（可替换文件内容）
+### 3.1 编辑保存文档描述（不修改文件内容）
 
 #### POST /api/documents/:id/save
 
@@ -393,8 +618,9 @@
 
 #### GET /api/documents/:id
 
-- **描述**：获取单个文档的详细元信息（不直接返回上传文件/正文内容），用于详情页展示和右侧预览的基础信息。若需要下载文件，请使用返回的 `downloadUrl` 字段调用导出接口。
-- **权限**：登录用户
+- **描述**：获取单个文档的详细元信息（不直接返回上传文件/正文内容），用于详情页展示和右侧预览的基础信息。若需要下载文件，请使用返回的 `downloadUrl` 字段调用导出接口。  
+  > 说明：该接口为历史保留的 `GET` 接口，自本次版本起，新接口将统一使用 `POST/PUT/DELETE`，不再新增 `GET`。
+- **权限**：登录用户（在 viewer 场景下，实际内容预览需结合预览配额接口判断，见下文）
 - **响应**：
   - **data**：
     - `_id`

@@ -10,17 +10,20 @@ const {
   exportDocument,
   saveDocument,
 } = require('../controllers/documentController')
-const {
-  setFavorite,
-  setArchived,
-} = require('../controllers/userDocumentMetaController')
+const { setFavorite, setArchived } = require('../controllers/userDocumentMetaController')
 const { shareWithUsers } = require('../controllers/documentShareController')
-const { protect } = require('../middleware/auth')
+const { protect, requireRole } = require('../middleware/auth')
 
 // @route   POST /api/documents
 // @desc    Create a new document
 // @access  Private
-router.post('/', protect, createDocument)
+router.post(
+  '/',
+  protect,
+  // viewer 只能查看，不能创建文档
+  (req, res, next) => requireRole(['user', 'admin'])(req, res, next),
+  createDocument,
+)
 
 // @route   POST /api/documents/query
 // @desc    Query documents with filters (enterprise-style POST 查询)
@@ -40,17 +43,32 @@ router.get('/:id', protect, getDocument)
 // @route   PUT /api/documents/:id
 // @desc    Update a document metadata
 // @access  Private
-router.put('/:id', protect, updateDocument)
+router.put(
+  '/:id',
+  protect,
+  (req, res, next) => requireRole(['user', 'admin'])(req, res, next),
+  updateDocument,
+)
 
 // @route   POST /api/documents/:id/save
 // @desc    编辑保存文档（可替换正文内容，也可只改标签/分类等）
 // @access  Private
-router.post('/:id/save', protect, saveDocument)
+router.post(
+  '/:id/save',
+  protect,
+  (req, res, next) => requireRole(['user', 'admin'])(req, res, next),
+  saveDocument,
+)
 
 // @route   DELETE /api/documents/:id
 // @desc    Delete a document
 // @access  Private
-router.delete('/:id', protect, deleteDocument)
+router.delete(
+  '/:id',
+  protect,
+  (req, res, next) => requireRole(['user', 'admin'])(req, res, next),
+  deleteDocument,
+)
 
 // @route   POST /api/documents/:id/export
 // @desc    导出文档内容为文件下载
@@ -60,16 +78,31 @@ router.post('/:id/export', protect, exportDocument)
 // @route   POST /api/documents/:id/favorite
 // @desc    设置/取消收藏
 // @access  Private
-router.post('/:id/favorite', protect, setFavorite)
+router.post(
+  '/:id/favorite',
+  protect,
+  (req, res, next) => requireRole(['user', 'admin'])(req, res, next),
+  setFavorite,
+)
 
 // @route   POST /api/documents/:id/archive
 // @desc    设置/取消归档
 // @access  Private
-router.post('/:id/archive', protect, setArchived)
+router.post(
+  '/:id/archive',
+  protect,
+  (req, res, next) => requireRole(['user', 'admin'])(req, res, next),
+  setArchived,
+)
 
 // @route   POST /api/documents/:id/share-with-users
 // @desc    将文档在指定时间内对指定用户公开（最多 30 天）
 // @access  Private
-router.post('/:id/share-with-users', protect, shareWithUsers)
+router.post(
+  '/:id/share-with-users',
+  protect,
+  (req, res, next) => requireRole(['user', 'admin'])(req, res, next),
+  shareWithUsers,
+)
 
 module.exports = router

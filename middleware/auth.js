@@ -42,15 +42,20 @@ exports.protect = (req, res, next) => {
   }
 }
 
-// 仅管理员可访问的路由守卫
-exports.adminOnly = (req, res, next) => {
-  if (!req.user || req.user.role !== 'admin') {
+// 通用角色校验：要求当前用户角色在允许列表中
+exports.requireRole = (roles) => (req, res, next) => {
+  if (!req.user || !roles.includes(req.user.role)) {
     return sendResponse(res, {
       success: false,
       code: 40301,
-      message: '无权限执行此操作，需要管理员身份',
+      message: '无权限执行此操作，角色不满足要求',
       status: 403,
     })
   }
   return next()
+}
+
+// 仅管理员可访问的路由守卫（基于通用 requireRole 封装）
+exports.adminOnly = (req, res, next) => {
+  return exports.requireRole(['admin'])(req, res, next)
 }

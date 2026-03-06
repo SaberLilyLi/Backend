@@ -11,6 +11,7 @@ router.use('/categories', require('./categoryRoutes'))
 router.use('/search', require('./searchRoutes'))
 router.use('/analytics', require('./analyticsRoutes'))
 router.use('/graph', require('./graphRoutes'))
+router.use('/admin', require('./adminRoutes'))
 
 module.exports = router
 
