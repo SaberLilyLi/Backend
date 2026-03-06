@@ -338,17 +338,12 @@
   - `limit` (number, 可选)：每页条数，默认 20，前端可提供 10/20/30/50/100 等选项。
 - **响应**：
   - **data**：
-    - `documents` (array)：文档列表，单项字段建议：
-      - `_id`
-      - `title`
-      - `tags`：标签数组。
-      - `category`：分类。
-      - `updated_at`：最后修改时间。
-      - `size`：文档大小（可选，字节数或估算）。
-      - `uploader`：上传用户信息对象：
-        - `username`
-        - `email`
-        - `avatarUrl`（可选）
+    - `documents` (array)：文档列表，每项均包含：
+      - `_id`、`title`、`tags`、`category`、`author_id`
+      - `updated_at`：最后一次更新时间（ISO 或时间戳）。
+      - `uploader`：上传人信息对象（必返），含 `id`、`username`、`email`、`avatarUrl`。
+      - `canEdit`：当前用户是否可编辑该文档（作者或管理员为 true）。
+      - `size`：文档大小（可选，若有）。
     - `page`、`limit`、`total`：分页信息。
 
 ### 2. 语义搜索（顶部搜索框）
@@ -524,7 +519,7 @@
 - **响应**：
   - **data**：更新后的文档对象。
 
-### 3.1 编辑保存文档描述（不修改文件内容）
+### 3.1 编辑保存文档（支持替换内容）
 
 #### POST /api/documents/:id/save
 
@@ -532,15 +527,17 @@
 - **权限**：登录用户（仅作者或管理员可操作）
 - **请求体（JSON）**：
   - `title` (string, 可选)：文档标题。
-  - `content` (string, 可选)：新的文档正文内容（例如 Markdown 文本）。如果不传，则保留原有内容不变。
-  - `content_type` (string, 可选)：内容类型。
+  - `content` (string, 可选)：新的文档正文内容（例如 Markdown 文本）。**传入即覆盖原有内容**；不传则保留原有内容不变。
+  - `content_type` (string, 可选)：内容类型，如 `markdown`、`text` 等。
   - `category` (string, 可选)：分类/文件夹。
   - `tags` (array<string>, 可选)：标签数组。
+  - `description` (string, 可选)：文档描述/备注。
 - **行为规则**：
-  - 若传入 `content`：视为“上传了新文件内容”，后端会用新的正文覆盖原有内容。
-  - 若未传 `content`：仅更新其他字段（如标签、分类），原有文件内容保持不变。
+  - 若传入 `content`：视为“上传了新文件内容”，后端会用新的正文**覆盖**原有内容。
+  - 若未传 `content`：仅更新其他字段（如标题、标签、分类、描述），原有文件内容保持不变。
+  - 所有字段均为可选，只更新传入的字段。
 - **响应**：
-  - 成功：返回保存后的完整文档对象（包含最新元数据和内容）。
+  - 成功：返回保存后的完整文档对象（包含 `uploader`、`updated_at` 等）。
   - 失败：返回权限或参数错误信息。
 
 ### 4. 收藏与归档操作
@@ -571,19 +568,20 @@
 
 #### PUT /api/documents/:id/visibility
 
-- **描述**：作者（或管理员）更新单篇文档的可见性和公开时间窗口。
+- **描述**：作者（或管理员）设置文档的**可见性**与**公开日期**（公开时间窗口）。
 - **权限**：私有（仅作者本人和管理员可操作）
 - **请求体（JSON）**：
-  - `visibility` (string, 可选)：`private` | `public`，默认为 `private`。
-  - `publicFrom` (string, 可选)：公开开始时间，ISO 时间字符串；不传则默认当前时间。
-  - `publicTo` (string, 可选)：公开结束时间，ISO 时间字符串；不传表示长期公开。
+  - `visibility` (string, 可选)：`private` | `public`。不传则不修改原值。
+  - `publicFrom` (string/number, 可选)：公开开始时间，支持 ISO 8601 字符串或时间戳（毫秒）；传 `null` 或空字符串表示清除。
+  - `publicTo` (string/number, 可选)：公开结束时间，格式同 `publicFrom`；不传表示不修改，清除表示长期公开。
+  - `publicBlocked` (boolean, 可选)：是否禁止对外公开（仅管理员可设置）；为 `true` 时即使 `visibility=public` 且在时间窗内也不对非作者/管理员开放。
 - **规则说明**：
   - 当 `visibility = private` 时，文档仅作者和管理员可见。
-  - 当 `visibility = public` 且当前时间在 `publicFrom` ~ `publicTo` 之间，文档对所有登录用户可见（除非被管理员禁止公开）。
-  - 若非作者且角色不是管理员，则调用会返回无权限错误。
--- **响应**：
-  - 成功：返回更新后的文档对象。
-  - 失败：返回权限错误或参数错误信息。
+  - 当 `visibility = public` 且当前时间在 `publicFrom`～`publicTo` 内，且未设置 `publicBlocked`，文档对所有登录用户可见。
+  - 管理员修改他人文档的可见性/日期后，会向该文档作者推送一条通知。
+- **响应**：
+  - 成功：返回更新后的文档对象（含 `visibility`、`publicFrom`、`publicTo`、`publicBlocked` 等）。
+  - 失败：400 参数错误（如 `visibility` 非枚举、日期格式无效）；403 无权限；404 文档不存在。
 
 ### 5. 指定用户共享（定向公开）
 
@@ -729,54 +727,104 @@
 
 ---
 
-## 五、标签与分类基础管理接口（供多个页面复用）
+## 五、标签与分类管理接口
 
 ### 1. 标签管理
 
-#### GET /api/tags
+#### POST /api/tags/query（推荐）
 
-- **描述**：获取当前用户的全部标签列表。
+- **描述**：查询标签列表。
 - **权限**：登录用户
+- **查询规则**：
+  - **管理员**：可看到所有标签。
+  - **普通用户**：只能看到自己创建的标签 + 全局标签（`is_global = true`）。
+- **请求体（JSON）**：
+  - `keyword` (string, 可选)：标签名称搜索。
+  - `page` (number, 可选)：页码，默认 1。
+  - `limit` (number, 可选)：每页条数，默认 50。
 - **响应**：
   - **data**：
-    - `tags` (array)：标签数组，每项至少包含：
-      - `_id`
-      - `name`
-      - `color`（可选）
+    - `tags` (array)：标签数组，每项包含 `_id`、`name`、`color`、`owner_id`、`is_global`、`usage_count`。
+    - `total`、`page`、`limit`：分页信息。
+
+#### GET /api/tags
+
+- **描述**：获取标签列表（兼容旧接口）。
+- **说明**：查询规则同 `POST /api/tags/query`。
 
 #### POST /api/tags
 
 - **描述**：创建标签。
-- **权限**：登录用户
+- **权限**：登录用户（`user` / `admin`）
 - **请求体（JSON）**：
   - `name` (string, 必填)
   - `color` (string, 可选)
 
 #### PUT /api/tags/:id
 
-- **描述**：更新标签名称或颜色。
+- **描述**：更新标签。
+- **权限**：标签创建者或管理员。
 
 #### DELETE /api/tags/:id
 
 - **描述**：删除标签。
+- **权限**：标签创建者或管理员。
 
 ### 2. 分类/文件夹管理
 
 #### GET /api/categories
 
-- **描述**：获取扁平的分类列表（可与 `/api/categories/tree` 结合使用）。
+- **描述**：查询分类列表，返回系统默认文件夹 + 用户自定义分类。
+- **权限**：登录用户
+- **查询规则**：每个用户只能看到自己创建的分类 + 全局分类（`is_global = true`）。
 
-#### 其他
+#### PUT /api/categories/:id
+
+- **描述**：更新分类。
+- **权限**：仅分类创建者本人。
+
+#### DELETE /api/categories/:id
+
+- **描述**：删除分类。
+- **权限**：仅分类创建者本人。
+
+#### POST /api/categories/auto-archive
+
+- **描述**：自动归档30天内无改动的文档（收藏文档除外）。
+
+### 3. 系统默认文件夹
+
+| 文件夹 | 说明 |
+|--------|------|
+| 收藏 | 用户收藏的文档 |
+| 最近 | 最近访问的文档 |
+| 已归档 | 30天无改动自动归档 |
+
+---
+
+## 六、通知系统接口
+
+### POST /api/notifications/query
+
+- **描述**：查询当前用户的通知/消息列表。
+
+### POST /api/notifications/:id/read
+
+- **描述**：标记一条通知为已读。
+
+> **通知触发场景**：管理员修改他人文档的可见性时，向原作者发送 `visibility_changed` 通知。
+
+---
+
 
 - 创建/更新/删除分类接口与前面“新建文件夹”部分的 `/api/categories`、`PUT /api/categories/:id`、`DELETE /api/categories/:id` 一致，此处不再赘述。
 
 ---
 
-以上是根据你给出的三个核心界面（知识库主页、文档上传界面、文档详情界面）抽象出的接口设计。若后续有新的交互流程或版本变更，可以在此基础上继续扩展或调整。
 
 ---
 
-## 六、统计与图谱相关接口（补充）
+## 七、统计与图谱相关接口
 
 ### 1. 数据统计与可视化接口
 

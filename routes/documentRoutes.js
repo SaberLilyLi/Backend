@@ -6,6 +6,7 @@ const {
   getDocuments,
   getDocument,
   updateDocument,
+  updateDocumentVisibility,
   deleteDocument,
   exportDocument,
   saveDocument,
@@ -39,6 +40,16 @@ router.get('/', protect, getDocuments)
 // @desc    Get a document by ID
 // @access  Private
 router.get('/:id', protect, getDocument)
+
+// @route   PUT /api/documents/:id/visibility
+// @desc    更新文档可见性（作者或管理员）；管理员修改时通知原作者
+// @access  Private
+router.put(
+  '/:id/visibility',
+  protect,
+  (req, res, next) => requireRole(['user', 'admin'])(req, res, next),
+  updateDocumentVisibility,
+)
 
 // @route   PUT /api/documents/:id
 // @desc    Update a document metadata

@@ -49,18 +49,55 @@ exports.createTag = async (req, res) => {
   }
 }
 
-// @route   GET /api/tags
-// @desc    Get all tags
+// @route   POST /api/tags/query
+// @route   GET /api/tags (兼容旧接口)
+// @desc    查询标签列表（管理员看全部，普通用户看自己的 + 全局标签）
 // @access  Private
 exports.getTags = async (req, res) => {
   const owner_id = req.user.id
-  console.log('Fetching tags for user:', req.user) // Debug log
+  const isAdmin = req.user.role === 'admin'
+  const source = req.method === 'POST' ? req.body : req.query
+  const { keyword, limit = 50, page = 1 } = source
 
   try {
-    const tags = await Tag.find({ owner_id })
-    sendResponse(res, { tags })
+    let query = {}
+
+    if (isAdmin) {
+      // 管理员看全部标签
+    } else {
+      // 普通用户：自己的标签 + 全局标签
+      query = {
+        $or: [{ owner_id }, { is_global: true }],
+      }
+    }
+
+    // 关键词搜索
+    if (keyword) {
+      query.name = { $regex: keyword, $options: 'i' }
+    }
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1)
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 50))
+
+    const total = await Tag.countDocuments(query)
+    const tags = await Tag.find(query)
+      .sort({ usage_count: -1, created_at: -1 })
+      .skip((pageNum - 1) * limitNum)
+      .limit(limitNum)
+      .populate('owner_id', 'username email')
+      .lean()
+
+    sendResponse(res, {
+      message: '标签列表获取成功',
+      data: {
+        tags,
+        total,
+        page: pageNum,
+        limit: limitNum,
+      },
+    })
   } catch (err) {
-    console.error(err.message)
+    console.error('[getTags]', err.message, err.stack)
     sendResponse(res, {
       success: false,
       code: 50000,
@@ -73,9 +110,10 @@ exports.getTags = async (req, res) => {
 // @desc    Update a tag
 // @access  Private
 exports.updateTag = async (req, res) => {
-  const { name, color } = req.body
+  const { name, color, is_global } = req.body
   const tagId = req.params.id
   const owner_id = req.user.id
+  const isAdmin = req.user.role === 'admin'
 
   try {
     let tag = await Tag.findById(tagId)
@@ -88,8 +126,9 @@ exports.updateTag = async (req, res) => {
       })
     }
 
-    // Check if tag belongs to current user
-    if (tag.owner_id.toString() !== owner_id) {
+    // 权限检查：作者或管理员可更新
+    const isOwner = tag.owner_id.toString() === owner_id
+    if (!isOwner && !isAdmin) {
       return sendResponse(res, {
         success: false,
         code: 403,
@@ -98,11 +137,17 @@ exports.updateTag = async (req, res) => {
     }
 
     // Update tag
-    tag.name = name
-    tag.color = color
+    if (typeof name !== 'undefined') tag.name = name
+    if (typeof color !== 'undefined') tag.color = color
+    if (typeof is_global !== 'undefined' && isAdmin) tag.is_global = is_global
     tag.updated_at = new Date()
 
     await tag.save()
+
+    sendResponse(res, {
+      message: '标签更新成功',
+      data: tag,
+    })
   } catch (err) {
     console.error(err.message)
     sendResponse(res, {
@@ -119,6 +164,7 @@ exports.updateTag = async (req, res) => {
 exports.deleteTag = async (req, res) => {
   const tagId = req.params.id
   const owner_id = req.user.id
+  const isAdmin = req.user.role === 'admin'
 
   try {
     const tag = await Tag.findById(tagId)
@@ -131,8 +177,9 @@ exports.deleteTag = async (req, res) => {
       })
     }
 
-    // Check if tag belongs to current user
-    if (tag.owner_id.toString() !== owner_id) {
+    // 权限检查：作者或管理员可删除
+    const isOwner = tag.owner_id.toString() === owner_id
+    if (!isOwner && !isAdmin) {
       return sendResponse(res, {
         success: false,
         code: 403,
@@ -144,7 +191,6 @@ exports.deleteTag = async (req, res) => {
 
     sendResponse(res, {
       message: '标签已删除',
-      status: 204,
     })
   } catch (err) {
     console.error(err.message)

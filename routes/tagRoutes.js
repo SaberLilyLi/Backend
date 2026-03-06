@@ -13,8 +13,13 @@ router.post(
   createTag,
 )
 
+// @route   POST /api/tags/query
+// @desc    查询标签列表（推荐使用 POST）
+// @access  Private
+router.post('/query', protect, getTags)
+
 // @route   GET /api/tags
-// @desc    Get all tags
+// @desc    查询标签列表（兼容旧接口）
 // @access  Private
 router.get('/', protect, getTags)
 

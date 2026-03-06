@@ -1,6 +1,6 @@
 const express = require('express')
 const router = express.Router()
-const { createCategory, getCategories, updateCategory, deleteCategory } = require('../controllers/categoryController')
+const { createCategory, getCategories, updateCategory, deleteCategory, autoArchive } = require('../controllers/categoryController')
 const { protect, requireRole } = require('../middleware/auth')
 
 // @route   POST /api/categories
@@ -13,8 +13,18 @@ router.post(
   createCategory,
 )
 
+// @route   POST /api/categories/query
+// @desc    查询分类列表（推荐使用 POST）
+// @access  Private
+router.post('/query', protect, getCategories)
+
+// @route   POST /api/categories/auto-archive
+// @desc    自动归档30天内无改动且未收藏的文档
+// @access  Private
+router.post('/auto-archive', protect, autoArchive)
+
 // @route   GET /api/categories
-// @desc    Get all categories
+// @desc    查询分类列表（兼容旧接口）
 // @access  Private
 router.get('/', protect, getCategories)
 

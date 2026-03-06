@@ -32,6 +32,10 @@ const categorySchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    is_global: {
+      type: Boolean,
+      default: false,
+    },
     sort_order: {
       type: Number,
       default: 0,

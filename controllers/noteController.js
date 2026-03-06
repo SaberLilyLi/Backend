@@ -50,15 +50,19 @@ exports.createNote = async (req, res) => {
 }
 
 // @route   GET /api/notes
-// @desc    Get all notes
+// @desc    Get all notes（管理员可见全部，普通用户仅自己的）
 // @access  Private
 exports.getNotes = async (req, res) => {
-  const { category, tags, priority, limit = 20, page = 1 } = req.query
+  const { category, tags, priority, limit = 20, page = 1, uploader } = req.query
   const author_id = req.user.id
+  const isAdmin = req.user.role === 'admin'
 
   try {
-    // Build query
-    let query = { author_id }
+    // Build query：管理员看全部，可用 uploader 按作者过滤；普通用户仅自己
+    let query = isAdmin ? {} : { author_id }
+    if (uploader) {
+      query.author_id = uploader
+    }
 
     if (category) {
       query.category = category

@@ -6,9 +6,11 @@ const sendResponse = require('../utils/response')
 // @access  Private
 exports.getKnowledgeGraph = async (req, res) => {
   const userId = req.user.id
+  const isAdmin = req.user.role === 'admin'
 
   try {
-    const docs = await Document.find({ author_id: userId }).select(
+    const docQuery = isAdmin ? {} : { author_id: userId }
+    const docs = await Document.find(docQuery).select(
       'title tags category',
     )
 

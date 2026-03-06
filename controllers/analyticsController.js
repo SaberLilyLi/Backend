@@ -8,11 +8,14 @@ const SearchLog = require('../models/SearchLog')
 // @access  Private
 exports.getOverview = async (req, res) => {
   const userId = req.user.id
+  const isAdmin = req.user.role === 'admin'
+  const docQuery = isAdmin ? {} : { author_id: userId }
+  const noteQuery = isAdmin ? {} : { author_id: userId }
 
   try {
     const [docCount, noteCount] = await Promise.all([
-      Document.countDocuments({ author_id: userId }),
-      Note.countDocuments({ author_id: userId }),
+      Document.countDocuments(docQuery),
+      Note.countDocuments(noteQuery),
     ])
 
     return sendResponse(res, {
@@ -37,12 +40,13 @@ exports.getOverview = async (req, res) => {
 // @access  Private
 exports.getTrends = async (req, res) => {
   const userId = req.user.id
+  const isAdmin = req.user.role === 'admin'
+  const docQuery = isAdmin ? {} : { author_id: userId }
+  const noteQuery = isAdmin ? {} : { author_id: userId }
 
   try {
-    const docs = await Document.find({ author_id: userId }).select(
-      'created_at',
-    )
-    const notes = await Note.find({ author_id: userId }).select('created_at')
+    const docs = await Document.find(docQuery).select('created_at')
+    const notes = await Note.find(noteQuery).select('created_at')
 
     const bucket = {}
 
