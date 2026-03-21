@@ -6,6 +6,7 @@ const { validationResult } = require('express-validator')
 const sendResponse = require('../utils/response')
 const UserDocumentMeta = require('../models/UserDocumentMeta')
 const DocumentShare = require('../models/DocumentShare')
+const { incrementTagUsage, decrementTagUsage, syncTagUsageDiff } = require('../utils/tagUsage')
 
 // @route   POST /api/documents
 // @desc    Create a new document
@@ -44,6 +45,13 @@ exports.createDocument = async (req, res) => {
       documentId: newDocument._id,
       lastAccessedAt: new Date(),
     })
+
+    // 更新标签使用次数
+    if (newDocument.tags && newDocument.tags.length) {
+      await incrementTagUsage(newDocument.tags, author_id).catch((err) =>
+        console.error('[createDocument] incrementTagUsage', err.message)
+      )
+    }
 
     const author = newDocument.author_id
     const uploader = author ? {
@@ -339,6 +347,8 @@ exports.updateDocument = async (req, res) => {
       })
     }
 
+    const oldTags = document.tags ? [...document.tags] : []
+
     // Update document（仅对传入的字段进行更新，避免覆盖为 undefined）
     if (typeof title !== 'undefined') {
       document.title = title
@@ -357,6 +367,13 @@ exports.updateDocument = async (req, res) => {
     document.updated_at = new Date()
 
     await document.save()
+
+    // 根据标签变化更新标签使用次数
+    if (typeof tags !== 'undefined') {
+      await syncTagUsageDiff(oldTags, document.tags, author_id).catch((err) =>
+        console.error('[updateDocument] syncTagUsageDiff', err.message)
+      )
+    }
     await document.populate('author_id', 'username email avatarUrl')
 
     const author = document.author_id
@@ -542,7 +559,17 @@ exports.deleteDocument = async (req, res) => {
       })
     }
 
+    const docTags = document.tags || []
+    const docAuthorId = document.author_id.toString()
+
     await Document.findByIdAndDelete(documentId)
+
+    // 减少该文档所用标签的使用次数
+    if (docTags.length) {
+      await decrementTagUsage(docTags, docAuthorId).catch((err) =>
+        console.error('[deleteDocument] decrementTagUsage', err.message)
+      )
+    }
 
     sendResponse(res, {
       message: '文档已删除',
@@ -635,6 +662,8 @@ exports.saveDocument = async (req, res) => {
       })
     }
 
+    const oldTags = doc.tags ? [...doc.tags] : []
+
     // 更新各字段（仅传入的才更新，未传入的保持原值）
     if (typeof title !== 'undefined') {
       doc.title = title
@@ -659,6 +688,14 @@ exports.saveDocument = async (req, res) => {
     doc.updated_at = new Date()
 
     await doc.save()
+
+    // 根据标签变化更新标签使用次数
+    if (typeof tags !== 'undefined') {
+      const authorId = doc.author_id.toString()
+      await syncTagUsageDiff(oldTags, doc.tags, authorId).catch((err) =>
+        console.error('[saveDocument] syncTagUsageDiff', err.message)
+      )
+    }
     await doc.populate('author_id', 'username email avatarUrl')
 
     const author = doc.author_id

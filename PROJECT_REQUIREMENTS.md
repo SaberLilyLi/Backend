@@ -72,26 +72,28 @@
 > 以下仅列出与本项目相关的主要集合，字段略去部分内部实现。
 
 -- **User**
-  - `username`：用户名（唯一，校验格式）。
-  - `email`：邮箱（唯一）。
-  - `password`：哈希后的密码。
-  - `avatarUrl`：头像地址（可选）。
-  - `role`：用户角色，`viewer` / `user` / `admin`，默认为 `user`。
-  - `createdAt`：创建时间。
+
+- `username`：用户名（唯一，校验格式）。
+- `email`：邮箱（唯一）。
+- `password`：哈希后的密码。
+- `avatarUrl`：头像地址（可选）。
+- `role`：用户角色，`viewer` / `user` / `admin`，默认为 `user`。
+- `createdAt`：创建时间。
 
 -- **Document**
-  - `title`：文档标题。
-  - `content`：文档内容（Markdown / 纯文本等）。
-  - `content_type`：内容类型（默认 `markdown`）。
-  - `category`：分类名称（与 Category 逻辑关联）。
-  - `tags`：标签字符串数组（与 Tag 逻辑关联）。
-  - `description`：文件描述 / 备注说明，仅用于展示与说明，不参与权限控制。
-  - `author_id`：关联用户 ID。
-  - `visibility`：可见性，`private` / `public`，默认 `private`。
-  - `publicFrom` / `publicTo`：公开时间窗口（可选）。
-  - `publicBlocked`：是否被管理员禁止公开，默认 `false`。
-  - `publicBlockedAt` / `publicBlockedBy`：禁止公开的时间与操作者（管理员）。
-  - `created_at` / `updated_at`：创建与更新时间。
+
+- `title`：文档标题。
+- `content`：文档内容（Markdown / 纯文本等）。
+- `content_type`：内容类型（默认 `markdown`）。
+- `category`：分类名称（与 Category 逻辑关联）。
+- `tags`：标签字符串数组（与 Tag 逻辑关联）。
+- `description`：文件描述 / 备注说明，仅用于展示与说明，不参与权限控制。
+- `author_id`：关联用户 ID。
+- `visibility`：可见性，`private` / `public`，默认 `private`。
+- `publicFrom` / `publicTo`：公开时间窗口（可选）。
+- `publicBlocked`：是否被管理员禁止公开，默认 `false`。
+- `publicBlockedAt` / `publicBlockedBy`：禁止公开的时间与操作者（管理员）。
+- `created_at` / `updated_at`：创建与更新时间。
 
 - **Note**
   - 与 Document 类似，增加 `priority` 字段（优先级）。
@@ -315,7 +317,6 @@
       - 同意：填写生效时间（默认 24 小时，可配置）和额外可预览文件数；系统自动更新 `extraTotal/extraRemaining`、`effectiveFrom/effectiveTo` 以及 `cooldownUntil`。
       - 拒绝：更新状态为 `rejected`，可填写拒绝原因；系统可选择是否进入冷静期（推荐：拒绝本身不自动触发冷静期，仅靠通过后的冷静期机制限制频率）。
 
-
 #### 5.3 AI 增强功能
 
 - **语义搜索 / 智能问答**：
@@ -533,4 +534,3 @@
 - **工程质量**：
   - 为核心模块（认证、文档、搜索）增加 Jest 单元测试与集成测试。
   - 引入代码质量工具（ESLint、Prettier）规范团队协作开发。
-

@@ -13,6 +13,7 @@ router.use('/analytics', require('./analyticsRoutes'))
 router.use('/graph', require('./graphRoutes'))
 router.use('/admin', require('./adminRoutes'))
 router.use('/notifications', require('./notificationRoutes'))
+router.use('/asset-orders', require('./assetOrderRoutes'))
 
 module.exports = router
 

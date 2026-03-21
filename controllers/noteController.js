@@ -3,6 +3,7 @@
 const Note = require('../models/Note')
 const { validationResult } = require('express-validator')
 const sendResponse = require('../utils/response')
+const { incrementTagUsage, decrementTagUsage } = require('../utils/tagUsage')
 
 // @route   POST /api/notes
 // @desc    Create a new note
@@ -33,6 +34,13 @@ exports.createNote = async (req, res) => {
     })
 
     const newNote = await note.save()
+
+    // 更新标签使用次数
+    if (newNote.tags && newNote.tags.length) {
+      await incrementTagUsage(newNote.tags, author_id).catch((err) =>
+        console.error('[createNote] incrementTagUsage', err.message)
+      )
+    }
 
     sendResponse(res, {
       message: '笔记创建成功',
@@ -163,7 +171,17 @@ exports.deleteNote = async (req, res) => {
       return res.status(403).json({ message: '无权删除此笔记' })
     }
 
+    const noteTags = note.tags || []
+    const noteAuthorId = note.author_id.toString()
+
     await Note.findByIdAndDelete(noteId)
+
+    // 减少该笔记所用标签的使用次数
+    if (noteTags.length) {
+      await decrementTagUsage(noteTags, noteAuthorId).catch((err) =>
+        console.error('[deleteNote] decrementTagUsage', err.message)
+      )
+    }
 
     sendResponse(res, {
       message: '笔记已删除',

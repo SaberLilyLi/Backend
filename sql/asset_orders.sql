@@ -1,0 +1,76 @@
+-- 资产工单模块（MySQL 8）DDL
+-- 说明：
+-- 1) 本 SQL 基于前端 asset-orders 页面字段映射。
+-- 2) 保留软删字段 deleted_at。
+-- 3) 结合分页查询接口和选项接口，提供常用索引。
+
+CREATE TABLE `asset_orders` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `order_no` VARCHAR(64) NOT NULL COMMENT '工单号',
+  `external_no` VARCHAR(64) DEFAULT NULL COMMENT '外部单号',
+  `order_type` VARCHAR(32) NOT NULL COMMENT '工单类型',
+  `status` VARCHAR(32) NOT NULL COMMENT '状态',
+  `priority` VARCHAR(16) NOT NULL DEFAULT 'medium' COMMENT '优先级',
+  `project_code` VARCHAR(64) DEFAULT NULL COMMENT '项目编码',
+  `applicant_name` VARCHAR(64) DEFAULT NULL COMMENT '申请人',
+  `applicant_phone` VARCHAR(32) DEFAULT NULL COMMENT '申请人手机号',
+  `approver_name` VARCHAR(64) DEFAULT NULL COMMENT '审批人',
+  `department` VARCHAR(64) DEFAULT NULL COMMENT '部门',
+  `supplier_name` VARCHAR(128) DEFAULT NULL COMMENT '供应商',
+  `warehouse_code` VARCHAR(64) DEFAULT NULL COMMENT '仓库编码',
+  `contract_no` VARCHAR(64) DEFAULT NULL COMMENT '合同号',
+  `serial_no` VARCHAR(128) DEFAULT NULL COMMENT '序列号',
+  `asset_tag` VARCHAR(128) DEFAULT NULL COMMENT '资产标签',
+  `model_no` VARCHAR(128) DEFAULT NULL COMMENT '型号',
+  `batch_no` VARCHAR(64) DEFAULT NULL COMMENT '批次号',
+  `payment_status` VARCHAR(32) DEFAULT NULL COMMENT '付款状态',
+  `risk_level` VARCHAR(16) DEFAULT NULL COMMENT '风险等级',
+  `city` VARCHAR(64) DEFAULT NULL COMMENT '城市',
+  `line_of_business` VARCHAR(64) DEFAULT NULL COMMENT '业务线',
+  `category` VARCHAR(64) DEFAULT NULL COMMENT '资产分类',
+  `channel` VARCHAR(64) DEFAULT NULL COMMENT '渠道来源',
+  `owner_name` VARCHAR(64) DEFAULT NULL COMMENT '负责人',
+  `amount` DECIMAL(18,2) DEFAULT NULL COMMENT '金额',
+  `currency` VARCHAR(16) DEFAULT 'CNY' COMMENT '币种',
+  `expect_arrival_time` TIME DEFAULT NULL COMMENT '期望到货时间(TimePicker)',
+  `booking_start_date` DATE DEFAULT NULL COMMENT '预约开始日期(DateRange start)',
+  `booking_end_date` DATE DEFAULT NULL COMMENT '预约结束日期(DateRange end)',
+  `delivery_date` DATE DEFAULT NULL COMMENT '交付日期(DatePicker)',
+  `accept_datetime` DATETIME DEFAULT NULL COMMENT '验收时间(DateTimePicker)',
+  `closed_at` DATETIME DEFAULT NULL COMMENT '关闭时间(DateTimePicker)',
+  `service_window` TIME DEFAULT NULL COMMENT '服务窗口(TimePicker)',
+  `maintenance_time_select` TIME DEFAULT NULL COMMENT '维护时段(TimeSelect)',
+  `date_pane_value` DATE DEFAULT NULL COMMENT '日期面板值(DatePickerPane)',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted_at` DATETIME DEFAULT NULL COMMENT '软删时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_order_no` (`order_no`),
+  KEY `idx_external_no` (`external_no`),
+  KEY `idx_status` (`status`),
+  KEY `idx_priority` (`priority`),
+  KEY `idx_project_code` (`project_code`),
+  KEY `idx_applicant_name` (`applicant_name`),
+  KEY `idx_department` (`department`),
+  KEY `idx_supplier_name` (`supplier_name`),
+  KEY `idx_city` (`city`),
+  KEY `idx_owner_name` (`owner_name`),
+  KEY `idx_created_at` (`created_at`),
+  KEY `idx_updated_at` (`updated_at`),
+  KEY `idx_closed_at` (`closed_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='资产工单主表';
+
+CREATE TABLE `asset_order_dict` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `dict_type` VARCHAR(64) NOT NULL COMMENT '如 status/priority/order_type/city/owner_name',
+  `dict_value` VARCHAR(64) NOT NULL,
+  `dict_label` VARCHAR(128) NOT NULL,
+  `sort_no` INT NOT NULL DEFAULT 0,
+  `enabled` TINYINT(1) NOT NULL DEFAULT 1,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_type_value` (`dict_type`, `dict_value`),
+  KEY `idx_type_enabled_sort` (`dict_type`, `enabled`, `sort_no`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='资产工单字典';
+
